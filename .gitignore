@@ -2,6 +2,6 @@
 .vscode
 *.out
 .pprof
-downloaderctl
+downloadctl
 dist
 vendor
