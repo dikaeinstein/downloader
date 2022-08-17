@@ -27,6 +27,10 @@ build:
 run:
 	@go run -a $(LDFLAGS) cmd/main.go
 
+## send test coverage to coveralls
+coveralls:
+	@go run github.com/mattn/goveralls -coverprofile=cover.out -service=github
+
 ## Remove binary
 clean:
 	if [ -f $(BINARY_NAME) ]; then rm -f $(BINARY_NAME); fi
