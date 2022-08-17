@@ -30,4 +30,3 @@ run:
 ## Remove binary
 clean:
 	if [ -f $(BINARY_NAME) ]; then rm -f $(BINARY_NAME); fi
-
