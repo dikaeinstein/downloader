@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"time"
 
@@ -17,8 +18,9 @@ import (
 )
 
 type cli struct {
-	cfg        Config
-	httpClient *http.Client
+	cfg           Config
+	httpClient    *http.Client
+	versionString string
 }
 
 type Config struct {
@@ -30,9 +32,15 @@ type Config struct {
 	parallel     bool
 	timeout      time.Duration
 	url          string
+	version      bool
 }
 
 func (c *cli) run(cmd *cobra.Command, args []string) error {
+	if c.cfg.version {
+		cmd.Println(c.versionString)
+		return nil
+	}
+
 	c.httpClient.Timeout = c.cfg.timeout
 
 	hasher, path := c.parseChecksum()
@@ -55,8 +63,17 @@ func (c *cli) setupConfig(cmd *cobra.Command, args []string) error {
 	c.cfg.checksumFile = viper.GetString("checksum-file")
 	c.cfg.parallel = viper.GetBool("parallel")
 	c.cfg.timeout = viper.GetDuration("timeout")
+	c.cfg.version = viper.GetBool("version")
 	c.parseFilename()
-	c.cfg.url = args[0]
+
+	if len(args) == 1 {
+		u, err := url.Parse(args[0])
+		if err != nil {
+			return err
+		}
+
+		c.cfg.url = u.String()
+	}
 
 	return nil
 }
@@ -91,33 +108,39 @@ func (c *cli) parseChecksum() (downloader.Hasher, string) {
 }
 
 func setupFlags(cmd *cobra.Command) error {
-	cmd.Flags().BoolP("parallel", "p", false, "Use parallel download.")
-	cmd.Flags().DurationP("timeout", "t", 10*time.Second, "Timeout for the download.")
-	cmd.Flags().StringP("checksum", "c", "", "Checksum of the file.")
-	cmd.Flags().StringP("checksum-url", "", "", "Url to download the checksum from.")
-	cmd.Flags().StringP("checksum-file", "", "", "Local file containing the checksum.")
-	cmd.Flags().StringP("filename", "f", "", "Filename to use.")
+	cmd.Flags().BoolP("parallel", "p", false,
+		"Use parallel download.")
+	cmd.Flags().DurationP("timeout", "t", 10*time.Second,
+		"Timeout for the download.")
+	cmd.Flags().StringP("checksum", "c", "",
+		"Checksum to verify downloaded file.")
+	cmd.Flags().StringP("checksum-url", "", "",
+		"Url to download the checksum to verify downloaded file.")
+	cmd.Flags().StringP("checksum-file", "", "",
+		"Local file containing the checksum to verify downloaded file.")
+	cmd.Flags().StringP("filename", "f", "",
+		"Filename to use.")
+	cmd.Flags().BoolP("version", "v", false,
+		"Version of downloaderctl.")
 
 	return viper.BindPFlags(cmd.Flags())
 }
 
 func newCommand(httpClient *http.Client, vOpt VersionOption) *cobra.Command {
 	cli := &cli{httpClient: httpClient}
+	cli.versionString = fmt.Sprintf(
+		"Version: %s\nGo version: %s\nGit hash: %s\nBuilt: %s\n",
+		vOpt.BinaryVersion, vOpt.GoVersion, vOpt.GitHash, vOpt.BuildDate,
+	)
 
 	cmd := &cobra.Command{
-		Use:     "downloaderctl",
+		Use:     "downloaderctl [flags] [url]",
 		Short:   "downloaderctl is a CLI tool which download files using the given url.",
 		Long:    "downloaderctl is a CLI tool which download files using the given url.",
-		Example: "downloaderctl [<options>] [url]",
-		Args:    cobra.ExactArgs(1),
+		Args:    cobra.MaximumNArgs(1),
 		PreRunE: cli.setupConfig,
 		RunE:    cli.run,
 	}
-
-	cmd.SetVersionTemplate(
-		fmt.Sprintf("Version: %s\nGo version: %s\nGit hash: %s\nBuilt: %s\n",
-			vOpt.BinaryVersion, vOpt.GoVersion, vOpt.GitHash, vOpt.BuildDate),
-	)
 
 	if err := setupFlags(cmd); err != nil {
 		log.Fatal(err)
