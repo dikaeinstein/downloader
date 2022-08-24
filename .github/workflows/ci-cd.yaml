@@ -52,7 +52,7 @@ jobs:
 
   goreleaser:
     name: Make Release
-    needs: [golangci, test]
+    needs: [golangci, test, security]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
