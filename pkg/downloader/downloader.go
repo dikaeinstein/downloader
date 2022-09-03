@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dikaeinstein/downloader/internal/pkg/fsys"
 )
@@ -83,54 +84,88 @@ func (dl *Downloader) Download(
 func (dl *Downloader) syncDownload(
 	ctx context.Context, url, filename, hashPath string,
 ) error {
-	req, err := http.NewRequestWithContext(
-		ctx, http.MethodGet, url, http.NoBody,
-	)
+	tmpDownloadPath, err := dl.downloadFile(ctx, url, filename)
 	if err != nil {
 		return err
 	}
 
+	if err = dl.verifyChecksum(ctx, tmpDownloadPath, hashPath); err != nil {
+		return err
+	}
+
+	// Remove the .tmp extension from the downloaded file.
+	downloadPath := strings.TrimSuffix(
+		tmpDownloadPath,
+		filepath.Ext(tmpDownloadPath),
+	)
+	// Rename the temporary file once fully downloaded.
+	return fsys.Rename(dl.fsys, tmpDownloadPath, downloadPath)
+}
+
+// downloadFile downloads a file from the given URL. It returns the path
+// to the downloaded file with a `.tmp` suffix.
+func (dl *Downloader) downloadFile(
+	ctx context.Context, url, filename string,
+) (string, error) {
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodGet, url, http.NoBody,
+	)
+	if err != nil {
+		return "", err
+	}
+
 	res, err := dl.httpClient.Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
 		data, err := io.ReadAll(res.Body)
 		if err != nil {
-			return fmt.Errorf("error reading response body: %v", err)
+			return "", fmt.Errorf("error reading response body: %v", err)
 		}
-		return fmt.Errorf(
+		return "", fmt.Errorf(
 			"download failed: %s: %s: %s", url, res.Status, string(data))
 	}
 
 	if filename == "" {
 		filename = filepath.Base(url)
 	}
-	downloadPath := filepath.Join(dl.downloadDir, filename)
+	downloadPath := filepath.Join(dl.downloadDir, filename+".tmp")
 
 	// Create the file with tmp extension. So we don't overwrite until
 	// the file is completely downloaded.
-	tmp, err := fsys.Create(dl.fsys, downloadPath+".tmp")
+	tmp, err := fsys.Create(dl.fsys, downloadPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer tmp.Close()
 
 	tmpFile, ok := tmp.(io.Writer)
 	if !ok {
-		return fmt.Errorf("invalid writer: %T", tmp)
+		return "", fmt.Errorf("invalid writer: %T", tmp)
 	}
 
 	dl.progressWriter.SetTotalBytes(res.ContentLength)
 	n, err := io.Copy(io.MultiWriter(tmpFile, dl.progressWriter), res.Body)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if res.ContentLength != -1 && res.ContentLength != n {
-		return fmt.Errorf("copied %v bytes; expected %v", n, res.ContentLength)
+		return "", fmt.Errorf("copied %v bytes; expected %v", n, res.ContentLength)
+	}
+
+	return downloadPath, nil
+}
+
+// verifyChecksum verifies the checksum of the downloaded file.
+func (dl *Downloader) verifyChecksum(
+	ctx context.Context, downloadPath, hashPath string,
+) error {
+	if dl.hasher == nil {
+		return nil
 	}
 
 	wantHex, err := dl.hasher.Hash(ctx, hashPath)
@@ -139,7 +174,7 @@ func (dl *Downloader) syncDownload(
 	}
 
 	fmt.Println("\nverifying checksum")
-	f, err := dl.fsys.Open(downloadPath + ".tmp")
+	f, err := dl.fsys.Open(downloadPath)
 	if err != nil {
 		return err
 	}
@@ -147,11 +182,9 @@ func (dl *Downloader) syncDownload(
 
 	err = dl.verifier.Verify(f, wantHex)
 	if err != nil {
-		return fmt.Errorf("error verifying checksum of %v: %v", tmpFile, err)
+		return fmt.Errorf("error verifying checksum: %v", err)
 	}
 
 	fmt.Println("checksums matched!")
-
-	// Rename the temporary file once fully downloaded
-	return fsys.Rename(dl.fsys, downloadPath+".tmp", downloadPath)
+	return nil
 }

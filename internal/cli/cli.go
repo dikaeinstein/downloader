@@ -110,7 +110,7 @@ func (c *cli) parseChecksum() (downloader.Hasher, string) {
 func setupFlags(cmd *cobra.Command) error {
 	cmd.Flags().BoolP("parallel", "p", false,
 		"use parallel download")
-	cmd.Flags().DurationP("timeout", "t", 10*time.Second,
+	cmd.Flags().DurationP("timeout", "t", 300*time.Second,
 		"timeout for the download")
 	cmd.Flags().StringP("checksum", "c", "",
 		"checksum to verify downloaded file")
