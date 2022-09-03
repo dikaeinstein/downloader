@@ -24,8 +24,10 @@ func TestDownloader(t *testing.T) {
 		contentLength      int64
 		filename           string
 		downloadedFilename string
+		progressWriter     downloader.ProgressWriter
 		resBody            *bytes.Buffer
 		statusCode         int
+		wantErr            error
 	}{
 		{
 			desc:               "can download remote file",
@@ -33,8 +35,10 @@ func TestDownloader(t *testing.T) {
 			contentLength:      17,
 			filename:           "testFile",
 			downloadedFilename: "testFile",
+			progressWriter:     &downloader.DefaultProgress{},
 			resBody:            bytes.NewBufferString("This is test data"),
 			statusCode:         http.StatusOK,
+			wantErr:            nil,
 		},
 		{
 			desc:               "can extract filename from url",
@@ -42,8 +46,24 @@ func TestDownloader(t *testing.T) {
 			contentLength:      17,
 			filename:           "",
 			downloadedFilename: "testFile",
+			progressWriter:     &downloader.ProgressBar{},
 			resBody:            bytes.NewBufferString("This is test data"),
 			statusCode:         http.StatusOK,
+			wantErr:            nil,
+		},
+		{
+			desc:               "can handle error when download fails",
+			url:                "https://example.com/testFile",
+			contentLength:      0,
+			filename:           "",
+			downloadedFilename: "",
+			progressWriter:     &downloader.ProgressBar{},
+			resBody:            bytes.NewBuffer(nil),
+			statusCode:         http.StatusInternalServerError,
+			wantErr: errors.New(
+				"download failed: " +
+					"https://example.com/testFile: Internal Server Error: ",
+			),
 		},
 	}
 
@@ -53,7 +73,8 @@ func TestDownloader(t *testing.T) {
 			fakeRoundTripper := roundTripFunc(
 				func(req *http.Request) *http.Response {
 					return &http.Response{
-						StatusCode:    http.StatusOK,
+						StatusCode:    tC.statusCode,
+						Status:        http.StatusText(tC.statusCode),
 						Body:          io.NopCloser(tC.resBody),
 						ContentLength: int64(tC.resBody.Len()),
 					}
@@ -64,16 +85,22 @@ func TestDownloader(t *testing.T) {
 			inMemFS := fsys.NewInMemFS(make(fstest.MapFS))
 			hasher := hash.FakeHasher{}
 			verifier := fakeHashVerifier{}
-			progresser := downloader.DefaultProgress{}
 
 			d, err := downloader.New(
-				".", testClient, inMemFS, hasher, progresser, verifier,
+				".", testClient, inMemFS, hasher,
+				tC.progressWriter, verifier,
 			)
 			require.NoError(t, err)
 
 			err = d.Download(
-				context.Background(), tC.url, tC.filename, "test.256")
-			require.NoError(t, err)
+				context.Background(),
+				tC.url, tC.filename,
+				"test.256",
+			)
+			if tC.wantErr != nil {
+				require.EqualError(t, err, tC.wantErr.Error())
+				return
+			}
 
 			require.Equal(t, exists(t, inMemFS, tC.downloadedFilename), true)
 

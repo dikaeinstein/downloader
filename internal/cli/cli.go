@@ -48,7 +48,7 @@ func (c *cli) run(cmd *cobra.Command, args []string) error {
 		c.httpClient,
 		fsys.OsFS{},
 		hasher,
-		downloader.DefaultProgress{},
+		&downloader.ProgressBar{},
 		hash.Verifier{})
 	if err != nil {
 		return err
@@ -57,7 +57,7 @@ func (c *cli) run(cmd *cobra.Command, args []string) error {
 	return dl.Download(context.Background(), c.cfg.url, c.cfg.filename, path)
 }
 
-func (c *cli) setupConfig(cmd *cobra.Command, args []string) error {
+func (c *cli) setupConfig(_ *cobra.Command, args []string) error {
 	c.cfg.checksum = viper.GetString("checksum")
 	c.cfg.checksumURL = viper.GetString("checksum-url")
 	c.cfg.checksumFile = viper.GetString("checksum-file")
@@ -109,35 +109,43 @@ func (c *cli) parseChecksum() (downloader.Hasher, string) {
 
 func setupFlags(cmd *cobra.Command) error {
 	cmd.Flags().BoolP("parallel", "p", false,
-		"Use parallel download.")
+		"use parallel download")
 	cmd.Flags().DurationP("timeout", "t", 10*time.Second,
-		"Timeout for the download.")
+		"timeout for the download")
 	cmd.Flags().StringP("checksum", "c", "",
-		"Checksum to verify downloaded file.")
+		"checksum to verify downloaded file")
 	cmd.Flags().StringP("checksum-url", "", "",
-		"Url to download the checksum to verify downloaded file.")
+		"url to download the checksum to verify downloaded file")
 	cmd.Flags().StringP("checksum-file", "", "",
-		"Local file containing the checksum to verify downloaded file.")
+		"local file containing the checksum to verify downloaded file")
 	cmd.Flags().StringP("filename", "f", "",
-		"Filename to use.")
+		"filename to use")
 	cmd.Flags().BoolP("version", "v", false,
-		"Version of downloaderctl.")
+		"version of downloaderctl")
 
 	return viper.BindPFlags(cmd.Flags())
 }
 
-func newCommand(httpClient *http.Client, vOpt VersionOption) *cobra.Command {
+func validArgLen(cmd *cobra.Command, args []string) error {
+	if !viper.GetBool("version") && !viper.GetBool("help") && len(args) == 0 {
+		return fmt.Errorf("url is required")
+	}
+
+	return nil
+}
+
+func newCommand(httpClient *http.Client, vOpt versionOption) *cobra.Command {
 	cli := &cli{httpClient: httpClient}
 	cli.versionString = fmt.Sprintf(
-		"Version: %s\nGo version: %s\nGit hash: %s\nBuilt: %s\n",
+		"Version: %s\nGo version: %s\nGit hash: %s\nBuilt: %s",
 		vOpt.BinaryVersion, vOpt.GoVersion, vOpt.GitHash, vOpt.BuildDate,
 	)
 
 	cmd := &cobra.Command{
-		Use:     "downloaderctl [flags] [url]",
+		Use:     "downloaderctl [flags] url",
 		Short:   "downloaderctl is a CLI tool which download files using the given url.",
 		Long:    "downloaderctl is a CLI tool which download files using the given url.",
-		Args:    cobra.MaximumNArgs(1),
+		Args:    validArgLen,
 		PreRunE: cli.setupConfig,
 		RunE:    cli.run,
 	}
@@ -149,7 +157,7 @@ func newCommand(httpClient *http.Client, vOpt VersionOption) *cobra.Command {
 	return cmd
 }
 
-type VersionOption struct {
+type versionOption struct {
 	BuildDate     string
 	BinaryVersion string
 	GitHash       string
@@ -157,9 +165,10 @@ type VersionOption struct {
 }
 
 type Option struct {
-	Version VersionOption
+	Version versionOption
 }
 
+// Run executes the downloaderctl command.
 func Run(opt Option) {
 	cmd := newCommand(&http.Client{}, opt.Version)
 	if err := cmd.Execute(); err != nil {

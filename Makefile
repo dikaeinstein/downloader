@@ -11,6 +11,7 @@ test:
 
 test-cover:
 	@go test -coverprofile=cover.out -race $(TESTFLAGS) ./...
+	@go tool cover -html=cover.out -o cover.html
 
 lint:
 	@golangci-lint run
@@ -22,10 +23,16 @@ LDFLAGS=-ldflags '-s -w \
 	-X "$(PACKAGE).gitHash=$(GIT_COMMIT_HASH)"'
 
 build:
-	@go build -a $(LDFLAGS) -o $(BINARY_NAME) cmd/main.go
+	@go build $(LDFLAGS) -o $(BINARY_NAME) cmd/main.go
+
+build-linux:
+	@GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BINARY_NAME) cmd/main.go
+
+install:
+	@go install $(LDFLAGS) cmd/main.go
 
 run:
-	@go run -a $(LDFLAGS) cmd/main.go
+	@go run $(LDFLAGS) cmd/main.go
 
 ## send test coverage to coveralls
 coveralls:

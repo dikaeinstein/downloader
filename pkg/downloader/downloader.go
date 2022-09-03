@@ -28,20 +28,21 @@ type HashVerifier interface {
 }
 
 // Progresser is an interface to report the progress of a download.
-type Progresser interface {
+type ProgressWriter interface {
+	io.Writer
 	// Progress reports the progress of a download.
-	Progress(percentDownloaded float64)
+	SetTotalBytes(totalBytes int64)
 }
 
 // Downloader represents a downloader that can download files from a URL,
 // and verify the checksum of the downloaded file.
 type Downloader struct {
-	downloadDir string
-	fsys        fs.FS
-	httpClient  *http.Client
-	hasher      Hasher
-	progresser  Progresser
-	verifier    HashVerifier
+	downloadDir    string
+	fsys           fs.FS
+	httpClient     *http.Client
+	hasher         Hasher
+	progressWriter ProgressWriter
+	verifier       HashVerifier
 }
 
 // New returns a new Downloader.
@@ -50,7 +51,7 @@ func New(
 	httpClient *http.Client,
 	fsys fs.FS,
 	hasher Hasher,
-	progresser Progresser,
+	progressWriter ProgressWriter,
 	verifier HashVerifier,
 ) (*Downloader, error) {
 	err := os.MkdirAll(dlDir, os.ModeDir)
@@ -59,12 +60,12 @@ func New(
 	}
 
 	dl := &Downloader{
-		downloadDir: dlDir,
-		fsys:        fsys,
-		httpClient:  httpClient,
-		hasher:      hasher,
-		progresser:  progresser,
-		verifier:    verifier,
+		downloadDir:    dlDir,
+		fsys:           fsys,
+		httpClient:     httpClient,
+		hasher:         hasher,
+		progressWriter: progressWriter,
+		verifier:       verifier,
 	}
 
 	return dl, nil
@@ -122,13 +123,8 @@ func (dl *Downloader) syncDownload(
 		return fmt.Errorf("invalid writer: %T", tmp)
 	}
 
-	// Create the bytesCountWriter used for counting response bytes
-	bcw := &bytesCountWriter{
-		totalExpectedBytes: res.ContentLength,
-		progresser:         dl.progresser,
-	}
-
-	n, err := io.Copy(tmpFile, io.TeeReader(res.Body, bcw))
+	dl.progressWriter.SetTotalBytes(res.ContentLength)
+	n, err := io.Copy(io.MultiWriter(tmpFile, dl.progressWriter), res.Body)
 	if err != nil {
 		return err
 	}
@@ -158,20 +154,4 @@ func (dl *Downloader) syncDownload(
 
 	// Rename the temporary file once fully downloaded
 	return fsys.Rename(dl.fsys, downloadPath+".tmp", downloadPath)
-}
-
-// countWriter counts the number of bytes written to it.
-type bytesCountWriter struct {
-	bytesWritten       int64
-	totalExpectedBytes int64
-	progresser         Progresser
-}
-
-func (bwc *bytesCountWriter) Write(p []byte) (int, error) {
-	n := len(p)
-	bwc.bytesWritten += int64(n)
-	percentDownloaded := float64(bwc.bytesWritten) / float64(bwc.totalExpectedBytes) * 100
-
-	bwc.progresser.Progress(percentDownloaded)
-	return n, nil
 }
