@@ -9,7 +9,7 @@ echo "Downloading downloadctl release ${VERSION} for ${OS}_${ARCH} ..."
 echo ""
 
 RELEASE_URL="https://github.com/dikaeinstein/downloader/releases/download/${VERSION}/downloadctl_${VERSION_STRIPPED}_${OS}_${ARCH}.tar.gz"
-code=$(curl -w '%{http_code}' -L $RELEASE_URL -o /tmp/downloadctl_.tar.gz)
+code=$(curl -w '%{http_code}' -L $RELEASE_URL -o /tmp/downloadctl.tar.gz)
 
 if [ $code != "200" ]; then
   echo ""
