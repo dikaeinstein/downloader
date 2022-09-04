@@ -1,4 +1,4 @@
-BINARY_NAME=downloadctl
+BINARY_NAME=
 
 PACKAGE=main
 BUILD_DATE=$(shell date +%Y-%m-%d\ %H:%M)
@@ -23,16 +23,16 @@ LDFLAGS=-ldflags '-s -w \
 	-X "$(PACKAGE).gitHash=$(GIT_COMMIT_HASH)"'
 
 build:
-	@go build $(LDFLAGS) -o $(BINARY_NAME) cmd/main.go
+	@go build $(LDFLAGS) ./cmd/downloadctl
 
 build-linux:
-	@GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BINARY_NAME) cmd/main.go
+	@GOOS=linux GOARCH=amd64 go build $(LDFLAGS) ./cmd/downloadctl
 
 install:
-	@go install $(LDFLAGS) cmd/main.go
+	@go install $(LDFLAGS) ./cmd/downloadctl
 
 run:
-	@go run $(LDFLAGS) cmd/main.go
+	@go run $(LDFLAGS) ./cmd/downloadctl
 
 ## send test coverage to coveralls
 coveralls:

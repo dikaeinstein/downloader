@@ -6,3 +6,5 @@ cover.html
 downloadctl
 dist
 vendor
+
+!cmd/downloadctl

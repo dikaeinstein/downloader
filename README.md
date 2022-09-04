@@ -1,17 +1,26 @@
 # Downloader
 
-Downloads files using the given URL. It supports parallel file download i.e it can download a file in chunks and then merge it.
-It provides a library that can be used in other projects and also a cli tool (downloaderctl).
+Downloads files using the given URL. It supports sync and parallel file download i.e it can download a file in chunks and then merge it.
+It provides a library that can be used in other projects and also a cli tool (downloadctl).
 
 [![CI/CD](https://github.com/dikaeinstein/downloader/actions/workflows/ci-cd.yaml/badge.svg)](https://github.com/dikaeinstein/downloader/actions/workflows/ci-cd.yaml)
 [![Coverage Status](https://coveralls.io/repos/github/dikaeinstein/downloader/badge.svg?branch=main)](https://coveralls.io/github/dikaeinstein/downloader?branch=main)
 
-## Features
+## Download and Install
 
-- Synchronous file download
-- Parallel file download
-- Auto select file download method based on file size
-<!-- - Download multiple files (either sync or parallel) -->
+To download and install a specific version of godl, copy and paste the installation command:
+
+```bash
+curl -s https://raw.githubusercontent.com/dikaeinstein/downloader/master/get.sh | sh -s -- v0.1.0
+```
+
+## Install with Go 1.18+
+
+The binary can be installed with `go install`. The binary is placed in $GOPATH/bin, or in $GOBIN if set:
+
+```bash
+go install github.com/dikaeinstein/downloader/cmd
+```
 
 ## Build From Source
 
