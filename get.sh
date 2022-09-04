@@ -1,5 +1,5 @@
 #!/bin/sh
-ARCH=="amd64"
+ARCH="amd64"
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 VERSION=$1
 # $VERSION with v prefix stripped
